@@ -73,6 +73,25 @@ const App: React.FC = () => {
     setShowSettings(false);
   };
 
+  const handleRewind = () => {
+    if (messages.length === 0 || isLoading) return;
+    
+    // Find the last index of a user message
+    const lastUserIdx = [...messages].reverse().findIndex(m => m.role === 'user');
+    
+    if (lastUserIdx === -1) {
+      // If there are no user messages, we can't rewind "before he sent a message"
+      // but we might want to reset to just the initial state or prompt the user.
+      return;
+    }
+
+    // Calculate the actual index in the original array
+    const actualIdx = messages.length - 1 - lastUserIdx;
+    
+    // Keep everything before the last user message
+    setMessages(messages.slice(0, actualIdx));
+  };
+
   const handleStartSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!scenario.trim()) return;
@@ -83,7 +102,6 @@ const App: React.FC = () => {
     try {
       // If user provided a first message, we use that as the first USER message to get things rolling
       let initialMessages: ChatMessage[] = [];
-      let triggerPrompt = "The scene begins. Please start the interaction based on the scenario.";
       
       if (firstMessage.trim()) {
         const userOpening: ChatMessage = {
@@ -93,7 +111,6 @@ const App: React.FC = () => {
           timestamp: new Date().toISOString()
         };
         initialMessages = [userOpening];
-        triggerPrompt = firstMessage;
       }
 
       const responseText = await callAI(initialMessages, settings, userName, persona, scenario);
@@ -182,6 +199,8 @@ const App: React.FC = () => {
     }
   };
 
+  const canRewind = messages.some(m => m.role === 'user');
+
   return (
     <div className="h-screen w-full flex items-center justify-center relative bg-slate-950">
       <div 
@@ -207,15 +226,32 @@ const App: React.FC = () => {
                 <img key={c.id} src={c.avatar} className="w-8 h-8 rounded-full border-2 border-slate-900 shadow-sm" title={c.name} alt={c.name} />
               ))}
             </div>
-            <button 
-              onClick={() => setShowSettings(true)}
-              className="p-2 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-white transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
+            
+            <div className="flex items-center gap-2">
+              {isScenarioSet && (
+                <button 
+                  onClick={handleRewind}
+                  disabled={!canRewind || isLoading}
+                  className="p-2 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-white transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                  title="Rewind to before last message"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                </button>
+              )}
+              
+              <button 
+                onClick={() => setShowSettings(true)}
+                className="p-2 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-white transition-colors"
+                title="Settings"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+            </div>
           </div>
         </header>
 
