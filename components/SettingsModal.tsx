@@ -57,6 +57,26 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ settings, setSettings, on
               className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-sm"
             />
           </div>
+
+          <div className="space-y-2 pt-2">
+            <div className="flex justify-between items-center mb-1">
+              <label className="text-white/60 text-xs font-semibold uppercase tracking-wider">Context Limit (Tokens)</label>
+              <span className="text-blue-400 text-xs font-bold">{Math.round(settings.contextLimit / 1000)}k</span>
+            </div>
+            <input 
+              type="range"
+              min="15000"
+              max="128000"
+              step="1000"
+              value={settings.contextLimit}
+              onChange={(e) => setSettings({ ...settings, contextLimit: parseInt(e.target.value) })}
+              className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-600"
+            />
+            <div className="flex justify-between text-[10px] text-white/20 uppercase font-bold tracking-tighter">
+              <span>15k</span>
+              <span>128k</span>
+            </div>
+          </div>
         </div>
 
         <div className="pt-4 border-t border-white/5 space-y-3">

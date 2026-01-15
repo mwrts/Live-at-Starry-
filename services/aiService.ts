@@ -4,6 +4,9 @@ import { getSystemInstruction } from "../constants";
 import { AppSettings, ChatMessage } from "../types";
 import { CHARACTERS } from "../characters";
 
+// Simple token estimation (approx 4 chars per token)
+const estimateTokens = (text: string) => Math.ceil(text.length / 4);
+
 export const callAI = async (
   messages: ChatMessage[],
   settings: AppSettings,
@@ -14,8 +17,24 @@ export const callAI = async (
   const characterNames = Object.values(CHARACTERS).map(c => c.id);
   const systemPrompt = getSystemInstruction(userName, userPersona, characterNames) + `\nSCENARIO: ${scenario}`;
   
+  // Apply context limit truncation
+  let relevantMessages = [...messages];
+  let currentTokens = estimateTokens(systemPrompt);
+  
+  // Truncate from the beginning of history if we exceed 80% of context limit 
+  // (leaving room for the response and overhead)
+  const safetyThreshold = settings.contextLimit * 0.8;
+  
+  for (let i = messages.length - 1; i >= 0; i--) {
+    currentTokens += estimateTokens(messages[i].text);
+    if (currentTokens > safetyThreshold) {
+      relevantMessages = messages.slice(i + 1);
+      break;
+    }
+  }
+
   if (settings.useOpenRouter && settings.openRouterKey) {
-    const history = messages.map(m => ({
+    const history = relevantMessages.map(m => ({
       role: m.role === 'model' ? 'assistant' : 'user',
       content: m.text
     }));
@@ -50,15 +69,14 @@ export const callAI = async (
 
     let lastResponse = "";
     
-    // If there are no messages yet, this is the very first trigger.
-    if (messages.length === 0) {
+    if (relevantMessages.length === 0) {
       const res = await chat.sendMessage({ message: "The scene begins. Please start the interaction based on the scenario." });
       return res.text;
     }
 
-    // Replay history to build context
-    for (let i = 0; i < messages.length; i++) {
-      const m = messages[i];
+    // Replay relevant history
+    for (let i = 0; i < relevantMessages.length; i++) {
+      const m = relevantMessages[i];
       if (m.role === 'user') {
         const res = await chat.sendMessage({ message: m.text });
         lastResponse = res.text;

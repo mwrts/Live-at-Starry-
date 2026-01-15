@@ -22,12 +22,18 @@ const App: React.FC = () => {
   const [isScenarioSet, setIsScenarioSet] = useState(() => localStorage.getItem('starry_isScenarioSet') === 'true');
   const [isLoading, setIsLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  
+  // Editing state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('starry_settings');
     return saved ? JSON.parse(saved) : {
       useOpenRouter: false,
       openRouterKey: '',
-      openRouterModel: 'google/gemini-2.0-flash-exp:free'
+      openRouterModel: 'google/gemini-2.0-flash-exp:free',
+      contextLimit: 32000
     };
   });
 
@@ -50,13 +56,13 @@ const App: React.FC = () => {
   }, [userName, scenario, persona, isScenarioSet]);
 
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && !editingId) {
       scrollRef.current.scrollTo({
         top: scrollRef.current.scrollHeight,
         behavior: 'smooth'
       });
     }
-  }, [messages, isLoading]);
+  }, [messages, isLoading, editingId]);
 
   const handleResetSession = () => {
     setMessages([]);
@@ -80,15 +86,10 @@ const App: React.FC = () => {
     const lastUserIdx = [...messages].reverse().findIndex(m => m.role === 'user');
     
     if (lastUserIdx === -1) {
-      // If there are no user messages, we can't rewind "before he sent a message"
-      // but we might want to reset to just the initial state or prompt the user.
       return;
     }
 
-    // Calculate the actual index in the original array
     const actualIdx = messages.length - 1 - lastUserIdx;
-    
-    // Keep everything before the last user message
     setMessages(messages.slice(0, actualIdx));
   };
 
@@ -100,7 +101,6 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // If user provided a first message, we use that as the first USER message to get things rolling
       let initialMessages: ChatMessage[] = [];
       
       if (firstMessage.trim()) {
@@ -197,6 +197,32 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const startEditing = (msg: ChatMessage) => {
+    setEditingId(msg.id);
+    setEditText(msg.text);
+  };
+
+  const saveEdit = () => {
+    if (!editingId) return;
+    
+    const updatedMessages = messages.map(m => {
+      if (m.id === editingId) {
+        const segments = m.role === 'model' ? parseCharacterSegments(editText) : undefined;
+        return { ...m, text: editText, segments };
+      }
+      return m;
+    });
+    
+    setMessages(updatedMessages);
+    setEditingId(null);
+    setEditText('');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditText('');
   };
 
   const canRewind = messages.some(m => m.role === 'user');
@@ -327,25 +353,67 @@ const App: React.FC = () => {
               <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-8 space-y-12 scrollbar-hide">
                 {messages.map((msg, idx) => (
                   <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    {msg.role === 'user' ? (
-                      <div className="max-w-[85%] bg-blue-600/10 border border-blue-500/20 text-blue-100 px-6 py-4 rounded-2xl rounded-tr-none shadow-sm animate-fade-in backdrop-blur-md">
-                        <div className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mb-1 opacity-60">
-                          {userName || 'Guest'}
+                    {editingId === msg.id ? (
+                      <div className={`w-full max-w-[90%] p-4 rounded-2xl bg-white/5 border border-white/10 animate-fade-in ${msg.role === 'user' ? 'ml-auto border-blue-500/30' : 'mr-auto'}`}>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Editing Message</span>
                         </div>
-                        <p className="text-sm md:text-base leading-relaxed font-medium">{msg.text}</p>
+                        <textarea 
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          className="w-full min-h-[120px] bg-black/40 border border-white/10 rounded-xl p-4 text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all resize-y text-sm leading-relaxed"
+                          autoFocus
+                        />
+                        <div className="flex gap-2 justify-end mt-4">
+                          <button 
+                            onClick={cancelEdit}
+                            className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-white/40 hover:text-white transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button 
+                            onClick={saveEdit}
+                            className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest rounded-lg shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                          >
+                            Save Changes
+                          </button>
+                        </div>
                       </div>
                     ) : (
-                      <div className="w-full">
-                        {msg.segments?.map((seg, sIdx) => (
-                          <CharacterCard 
-                            key={sIdx} 
-                            characterKey={seg.character} 
-                            content={seg.content} 
-                            isLast={idx === messages.length - 1}
-                            onRegenerate={() => handleRegenerate(msg.id)}
-                          />
-                        ))}
-                      </div>
+                      <>
+                        {msg.role === 'user' ? (
+                          <div className="group relative max-w-[85%] bg-blue-600/10 border border-blue-500/20 text-blue-100 px-6 py-4 rounded-2xl rounded-tr-none shadow-sm animate-fade-in backdrop-blur-md">
+                            <div className="flex justify-between items-start mb-1">
+                              <div className="text-[10px] text-blue-400 font-bold uppercase tracking-widest opacity-60">
+                                {userName || 'Guest'}
+                              </div>
+                              <button 
+                                onClick={() => startEditing(msg)}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 -mt-1 -mr-3 text-white/20 hover:text-white/60"
+                                title="Edit message"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                            </div>
+                            <p className="text-sm md:text-base leading-relaxed font-medium">{msg.text}</p>
+                          </div>
+                        ) : (
+                          <div className="w-full">
+                            {msg.segments?.map((seg, sIdx) => (
+                              <CharacterCard 
+                                key={sIdx} 
+                                characterKey={seg.character} 
+                                content={seg.content} 
+                                isLast={idx === messages.length - 1}
+                                onRegenerate={() => handleRegenerate(msg.id)}
+                                onEdit={() => startEditing(msg)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 ))}
@@ -373,10 +441,11 @@ const App: React.FC = () => {
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Message the group..."
                     className="flex-1 bg-white/5 border border-white/10 rounded-xl py-4 px-6 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all text-sm md:text-base"
+                    disabled={!!editingId}
                   />
                   <button
                     type="submit"
-                    disabled={isLoading || !input.trim()}
+                    disabled={isLoading || !input.trim() || !!editingId}
                     className="w-14 h-14 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all shadow-lg active:scale-90"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 text-white">

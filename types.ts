@@ -27,4 +27,5 @@ export interface AppSettings {
   useOpenRouter: boolean;
   openRouterKey: string;
   openRouterModel: string;
+  contextLimit: number;
 }
