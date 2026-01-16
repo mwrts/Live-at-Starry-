@@ -14,8 +14,12 @@ export const callAI = async (
   userPersona: string,
   scenario: string
 ): Promise<string> => {
-  const characterNames = Object.values(CHARACTERS).map(c => c.id);
-  const systemPrompt = getSystemInstruction(userName, userPersona, characterNames) + `\nSCENARIO: ${scenario}`;
+  // Construct detailed character profiles for the system prompt
+  const characterProfiles = Object.values(CHARACTERS)
+    .map(c => `[${c.id}] Name: ${c.name}\n${c.description}`)
+    .join('\n\n');
+
+  const systemPrompt = getSystemInstruction(userName, userPersona, characterProfiles, scenario);
   
   // Apply context limit truncation
   let relevantMessages = [...messages];
@@ -69,12 +73,13 @@ export const callAI = async (
 
     let lastResponse = "";
     
+    // If no history, we prompt the model to start the scene
     if (relevantMessages.length === 0) {
-      const res = await chat.sendMessage({ message: "The scene begins. Please start the interaction based on the scenario." });
+      const res = await chat.sendMessage({ message: "The scene begins. Please start the interaction based on the permanent scenario and character instructions." });
       return res.text;
     }
 
-    // Replay relevant history
+    // Replay relevant history to maintain context state in the chat object
     for (let i = 0; i < relevantMessages.length; i++) {
       const m = relevantMessages[i];
       if (m.role === 'user') {

@@ -7,14 +7,16 @@ import { CHARACTERS } from "../characters";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const startChat = () => {
-  // Get available character IDs to satisfy getSystemInstruction requirements
-  const characterNames = Object.keys(CHARACTERS);
+  // Construct detailed character profiles for the system prompt
+  const characterProfiles = Object.values(CHARACTERS)
+    .map(c => `[${c.id}] Name: ${c.name}\n${c.description}`)
+    .join('\n\n');
   
   return ai.chats.create({
     model: 'gemini-3-flash-preview',
     config: {
-      // Fixed: getSystemInstruction requires three arguments: userName, userPersona and availableCharacters
-      systemInstruction: getSystemInstruction('', '', characterNames),
+      // Fixed: getSystemInstruction requires four arguments: userName, userPersona, characterProfiles, and scenario
+      systemInstruction: getSystemInstruction('', '', characterProfiles, ''),
       temperature: 0.8,
     },
   });
